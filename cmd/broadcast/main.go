@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
+	_ "github.com/aaronland/go-broadcaster-slack"
 	"github.com/aaronland/go-broadcaster/app/broadcast"
-	_ "github.com/aaronland/go-broadcaster-slack"	
 	"log"
 )
 
