@@ -6,8 +6,8 @@ require (
 	github.com/aaronland/go-broadcaster v0.0.7
 	github.com/aaronland/go-image-encode v0.0.0-20200215191655-047f61aedbfe
 	github.com/aaronland/go-uid v0.4.0
-	github.com/sfomuseum/go-slack v1.1.1
 	github.com/sfomuseum/runtimevar v1.0.2
+	github.com/whosonfirst/go-ioutil v1.0.2
 )
 
 require (
@@ -35,6 +35,7 @@ require (
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
+	github.com/sfomuseum/go-flags v0.10.0 // indirect
 	go.opencensus.io v0.23.0 // indirect
 	gocloud.dev v0.26.0 // indirect
 	golang.org/x/net v0.0.0-20220401154927-543a649e0bdd // indirect
