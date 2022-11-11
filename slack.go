@@ -12,7 +12,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/aaronland/go-broadcaster"
 	"github.com/aaronland/go-image-encode"
@@ -97,113 +96,21 @@ func NewSlackBroadcaster(ctx context.Context, uri string) (broadcaster.Broadcast
 
 func (b *SlackBroadcaster) BroadcastMessage(ctx context.Context, msg *broadcaster.Message) (uid.UID, error) {
 
-	type upload_rsp struct {
-		index int
-		url   string
-	}
-
-	var image_urls []string
-
 	if len(msg.Images) > 0 {
-
-		image_urls = make([]string, len(msg.Images))
-
-		done_ch := make(chan bool)
-		err_ch := make(chan error)
-		upload_ch := make(chan upload_rsp)
-
-		ctx, cancel := context.WithCancel(ctx)
-		defer cancel()
-
-		for idx, im := range msg.Images {
-
-			go func(idx int, im image.Image) {
-
-				defer func() {
-					done_ch <- true
-				}()
-
-				select {
-				case <-ctx.Done():
-					return
-				default:
-					// pass
-				}
-
-				url, err := b.uploadImage(ctx, im)
-
-				if err != nil {
-					err_ch <- fmt.Errorf("Failed to upload image, %w", err)
-					return
-				}
-
-				upload_ch <- upload_rsp{index: idx, url: url}
-				return
-
-			}(idx, im)
-
-		}
-
-		remaining := len(msg.Images)
-
-		for remaining > 0 {
-			select {
-			case <-done_ch:
-				remaining -= 1
-			case err := <-err_ch:
-				return nil, fmt.Errorf("Failed to broadcast message, %w", err)
-			case rsp := <-upload_ch:
-				image_urls[rsp.index] = rsp.url
-			}
-		}
-
+		return b.broadcastMessageWithImages(ctx, msg)
 	}
 
-	log.Println("IM", len(image_urls))
+	return b.broadcastMessage(ctx, msg)
+}
+
+func (b *SlackBroadcaster) broadcastMessage(ctx context.Context, msg *broadcaster.Message) (uid.UID, error) {
 
 	msg_text := fmt.Sprintf("%s %s", msg.Title, msg.Body)
 	msg_text = strings.TrimSpace(msg_text)
 
-	blocks := make([]interface{}, 0)
-
-	if msg_text != "" {
-
-		text_block := Block{
-			Type: "section",
-			Text: &Text{
-				Type: "mrkdwn",
-				Text: msg_text,
-			},
-		}
-
-		blocks = append(blocks, text_block)
-	}
-
-	for _, url := range image_urls {
-
-		img_block := Image{
-			Type:     "image",
-			ImageURL: url,
-			AltText:  "alt text",
-		}
-
-		blocks = append(blocks, img_block)
-	}
-
-	log.Println(blocks)
-
-	enc_blocks, err := json.Marshal(blocks)
-
-	if err != nil {
-		return nil, fmt.Errorf("Failed to marshal blocks, %w", err)
-	}
-
-	str_blocks := string(enc_blocks)
-	log.Printf("CHAT '%s'\n", string(str_blocks))
-
 	args := url.Values{}
 	args.Set("channel", b.channel)
-	args.Set("blocks", str_blocks)
+	args.Set("text", msg_text)
 
 	args_enc := args.Encode()
 	args_r := strings.NewReader(args_enc)
@@ -243,19 +150,37 @@ func (b *SlackBroadcaster) BroadcastMessage(ctx context.Context, msg *broadcaste
 	return uid.NewStringUID(ctx, "slack")
 }
 
+func (b *SlackBroadcaster) broadcastMessageWithImages(ctx context.Context, msg *broadcaster.Message) (uid.UID, error) {
+
+	for idx, im := range msg.Images {
+
+		args := &url.Values{}
+		args.Set("channels", b.channel)
+
+		if idx == 0 {
+			msg_text := fmt.Sprintf("%s %s", msg.Title, msg.Body)
+			msg_text = strings.TrimSpace(msg_text)
+			args.Set("text", msg_text)
+		}
+
+		_, err := b.uploadImage(ctx, im, args)
+
+		if err != nil {
+			return nil, fmt.Errorf("Failed to upload image, %w", err)
+		}
+
+	}
+
+	// there isn't really an ID property in these responses
+	return uid.NewStringUID(ctx, "slack")
+}
+
 func (b *SlackBroadcaster) SetLogger(ctx context.Context, logger *log.Logger) error {
 	b.logger = logger
 	return nil
 }
 
-func (b *SlackBroadcaster) uploadImage(ctx context.Context, im image.Image) (string, error) {
-
-	// comment := fmt.Sprintf("%s %s", msg.Title, msg.Body)
-	// comment = strings.TrimSpace(comment)
-
-	args := &url.Values{}
-	// args.Set("channels", b.channel)
-	// args.Set("initial_comment", comment)
+func (b *SlackBroadcaster) uploadImage(ctx context.Context, im image.Image, args *url.Values) (string, error) {
 
 	var buf bytes.Buffer
 	wr := bufio.NewWriter(&buf)
