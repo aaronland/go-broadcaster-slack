@@ -33,6 +33,10 @@ Because of the way the Slack API works (I think) if a "broadcast" message contai
 
 If a "broadcast" message contains images each image will be posted separately. Any text associated with the "broadcast" message will be assigned to the first image upload but not the others. If there's a way to upload multiple images with a single "chat" message using the API I haven't been able to figure it out and I would welcome pointers.
 
+## Known knowns
+
+Currently all images are decoded and then re-encoded as PNG files. Eventually this will be improved to prevent things like animated GIFs from being de-animated.
+
 ## See also
 
 * https://github.com/aaronland/go-broadcaster
