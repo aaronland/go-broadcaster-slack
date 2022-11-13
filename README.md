@@ -18,12 +18,14 @@ go build -mod vendor -o bin/broadcast cmd/broadcast/main.go
 ```
 $> bin/broadcast/main.go \
 	-body 'this is a test' \
-	-broadcaster 'slack://{SLACK_CHANNEL_NAME_OR_ID}?credentials=file:///usr/local/slack-broadcaster.txt' \
+	-broadcaster 'slack://{SLACK_CHANNEL_NAME_OR_ID}?credentials={RUNTIMVAR_URI}' \
 	-image /usr/local/000.jpg \
 	-image /usr/local/001.jpg	
 ```
 
-Where the `?credentials=` is expected to be a valid [sfomuseum/runtimevar](https://github.com/sfomuseum/runtimevar) URI for example `file:///usr/local/slack-broadcaster.txt`). The value of that URI, when dereferenced, is expected to contain a valid Slack API OAuth token. That token should have the following scopes: `channels:read`, `chat:write`, `files:write`.
+Where the `?credentials=` is expected to be a valid [sfomuseum/runtimevar](https://github.com/sfomuseum/runtimevar) URI. For example `file:///usr/local/slack-broadcaster.txt`.
+
+The value of that URI, when dereferenced, is expected to contain a valid Slack API OAuth token. That token should have the following scopes: `channels:read`, `chat:write`, `files:write`.
 
 #### Implementation details
 
