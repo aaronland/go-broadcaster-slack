@@ -1,13 +1,5 @@
 package slack
 
-/*
- get channel list
- https://api.slack.com/methods/conversations.list/test
-
- > curl -F "file=@000.jpg" -F "initial_comment=Testing" -F channels={CHANNEL} -H "Authorization: Bearer {TOKEN}" https://slack.com/api/files.upload
-{"ok":true,"file":{"id":"F04ADCSLQ2Y"
-*/
-
 import (
 	"bufio"
 	"bytes"
@@ -25,7 +17,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
-	_ "os"
 	"strings"
 	"time"
 )
@@ -55,6 +46,8 @@ func NewSlackBroadcaster(ctx context.Context, uri string) (broadcaster.Broadcast
 		return nil, fmt.Errorf("Failed to parse URI, %w", err)
 	}
 
+	channel := u.Host
+
 	q := u.Query()
 
 	creds_uri := q.Get("credentials")
@@ -71,8 +64,6 @@ func NewSlackBroadcaster(ctx context.Context, uri string) (broadcaster.Broadcast
 	if err != nil {
 		return nil, fmt.Errorf("Failed to derive URI from credentials, %w", err)
 	}
-
-	channel := u.Host
 
 	enc, err := encode.NewEncoder(ctx, "png://")
 
@@ -94,22 +85,22 @@ func NewSlackBroadcaster(ctx context.Context, uri string) (broadcaster.Broadcast
 	return br, nil
 }
 
-func (b *SlackBroadcaster) BroadcastMessage(ctx context.Context, msg *broadcaster.Message) (uid.UID, error) {
+func (br *SlackBroadcaster) BroadcastMessage(ctx context.Context, msg *broadcaster.Message) (uid.UID, error) {
 
 	if len(msg.Images) > 0 {
-		return b.broadcastMessageWithImages(ctx, msg)
+		return br.broadcastMessageWithImages(ctx, msg)
 	}
 
-	return b.broadcastMessage(ctx, msg)
+	return br.broadcastMessage(ctx, msg)
 }
 
-func (b *SlackBroadcaster) broadcastMessage(ctx context.Context, msg *broadcaster.Message) (uid.UID, error) {
+func (br *SlackBroadcaster) broadcastMessage(ctx context.Context, msg *broadcaster.Message) (uid.UID, error) {
 
 	msg_text := fmt.Sprintf("%s %s", msg.Title, msg.Body)
 	msg_text = strings.TrimSpace(msg_text)
 
 	args := url.Values{}
-	args.Set("channel", b.channel)
+	args.Set("channel", br.channel)
 	args.Set("text", msg_text)
 
 	args_enc := args.Encode()
@@ -123,7 +114,7 @@ func (b *SlackBroadcaster) broadcastMessage(ctx context.Context, msg *broadcaste
 
 	req.Header.Set("Content-type", "application/x-www-form-urlencoded")
 
-	rsp, err := b.call(ctx, req)
+	rsp, err := br.call(ctx, req)
 
 	if err != nil {
 		return nil, fmt.Errorf("Failed to call the Slack API, %w", err)
@@ -135,27 +126,24 @@ func (b *SlackBroadcaster) broadcastMessage(ctx context.Context, msg *broadcaste
 		return nil, fmt.Errorf("Failed to read API response, %w", err)
 	}
 
-	log.Println(string(body))
-
 	ok_rsp := gjson.GetBytes(body, "ok")
 
 	if !ok_rsp.Bool() {
-
 		err_rsp := gjson.GetBytes(body, "error")
 		// something something something list errors
 		return nil, fmt.Errorf("API returned an error, %s", err_rsp.String())
 	}
 
 	// there isn't really an ID property in these responses
-	return uid.NewStringUID(ctx, "slack")
+	return br.uid(ctx)
 }
 
-func (b *SlackBroadcaster) broadcastMessageWithImages(ctx context.Context, msg *broadcaster.Message) (uid.UID, error) {
+func (br *SlackBroadcaster) broadcastMessageWithImages(ctx context.Context, msg *broadcaster.Message) (uid.UID, error) {
 
 	for idx, im := range msg.Images {
 
 		args := &url.Values{}
-		args.Set("channels", b.channel)
+		args.Set("channels", br.channel)
 
 		if idx == 0 {
 			msg_text := fmt.Sprintf("%s %s", msg.Title, msg.Body)
@@ -163,7 +151,7 @@ func (b *SlackBroadcaster) broadcastMessageWithImages(ctx context.Context, msg *
 			args.Set("text", msg_text)
 		}
 
-		_, err := b.uploadImage(ctx, im, args)
+		err := br.uploadImage(ctx, im, args)
 
 		if err != nil {
 			return nil, fmt.Errorf("Failed to upload image, %w", err)
@@ -171,33 +159,35 @@ func (b *SlackBroadcaster) broadcastMessageWithImages(ctx context.Context, msg *
 
 	}
 
-	// there isn't really an ID property in these responses
-	return uid.NewStringUID(ctx, "slack")
+	// Unlike the chat API there are ID properties in file upload responses but
+	// ultimately they are not relevant for doing anything with the message that
+	// is posted to a channel
+	return br.uid(ctx)
 }
 
-func (b *SlackBroadcaster) SetLogger(ctx context.Context, logger *log.Logger) error {
-	b.logger = logger
+func (br *SlackBroadcaster) SetLogger(ctx context.Context, logger *log.Logger) error {
+	br.logger = logger
 	return nil
 }
 
-func (b *SlackBroadcaster) uploadImage(ctx context.Context, im image.Image, args *url.Values) (string, error) {
+func (br *SlackBroadcaster) uploadImage(ctx context.Context, im image.Image, args *url.Values) error {
 
 	var buf bytes.Buffer
 	wr := bufio.NewWriter(&buf)
 
-	err := b.encoder.Encode(ctx, im, wr)
+	err := br.encoder.Encode(ctx, im, wr)
 
 	if err != nil {
-		return "", fmt.Errorf("Failed to encode image, %w", err)
+		return fmt.Errorf("Failed to encode image, %w", err)
 	}
 
 	wr.Flush()
 
-	br := bytes.NewReader(buf.Bytes())
-	return b.uploadReader(ctx, br, args)
+	b_r := bytes.NewReader(buf.Bytes())
+	return br.uploadReader(ctx, b_r, args)
 }
 
-func (b *SlackBroadcaster) uploadReader(ctx context.Context, r io.Reader, args *url.Values) (string, error) {
+func (br *SlackBroadcaster) uploadReader(ctx context.Context, r io.Reader, args *url.Values) error {
 
 	pipe_r, pipe_wr := io.Pipe()
 
@@ -238,41 +228,27 @@ func (b *SlackBroadcaster) uploadReader(ctx context.Context, r io.Reader, args *
 	req, err := http.NewRequest("POST", SLACK_API_UPLOAD, pipe_r)
 
 	if err != nil {
-		return "", fmt.Errorf("Failed to create new request, %w", err)
+		return fmt.Errorf("Failed to create new request, %w", err)
 	}
 
 	req.Header.Add("Content-Type", wr.FormDataContentType())
 
-	rsp, err := b.call(ctx, req)
+	rsp, err := br.call(ctx, req)
 
 	if err != nil {
-		return "", fmt.Errorf("Failed to call the Slack API, %w", err)
+		return fmt.Errorf("Failed to call the Slack API, %w", err)
 	}
 
 	defer rsp.Close()
 
 	select {
 	case err := <-err_ch:
-		return "", fmt.Errorf("There was a problem upload your file, %w", err)
+		return fmt.Errorf("There was a problem upload your file, %w", err)
 	default:
 		//
 	}
 
-	body, err := io.ReadAll(rsp)
-
-	if err != nil {
-		return "", fmt.Errorf("Failed to read upload response body, %w", err)
-	}
-
-	log.Println(string(body))
-
-	url_rsp := gjson.GetBytes(body, "file.thumb_480")
-
-	if !url_rsp.Exists() {
-		return "", fmt.Errorf("Failed to determine upload (private) URL")
-	}
-
-	return url_rsp.String(), nil
+	return nil
 }
 
 func (br *SlackBroadcaster) call(ctx context.Context, req *http.Request) (io.ReadSeekCloser, error) {
@@ -293,4 +269,10 @@ func (br *SlackBroadcaster) call(ctx context.Context, req *http.Request) (io.Rea
 	}
 
 	return ioutil.NewReadSeekCloser(rsp.Body)
+}
+
+func (br *SlackBroadcaster) uid(ctx context.Context) (uid.UID, error) {
+	now := time.Now()
+	ts := now.Unix()
+	return uid.NewInt64UID(ctx, ts)
 }
