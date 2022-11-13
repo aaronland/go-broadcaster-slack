@@ -23,7 +23,7 @@ $> bin/broadcast/main.go \
 	-image /usr/local/001.jpg	
 ```
 
-Where the `?credentials=` is expected to be a valid [sfomuseum/runtimevar](https://github.com/sfomuseum/runtimevar) URI and its value (for example `/usr/local/slack-broadcaster.txt`) is expected to contain a valid Slack API OAuth token. That token should have the following scopes: `channels:read`, `chat:write`, `files:write`.
+Where the `?credentials=` is expected to be a valid [sfomuseum/runtimevar](https://github.com/sfomuseum/runtimevar) URI for example `file:///usr/local/slack-broadcaster.txt`). The value of that URI, when dereferenced, is expected to contain a valid Slack API OAuth token. That token should have the following scopes: `channels:read`, `chat:write`, `files:write`.
 
 #### Implementation details
 
