@@ -31,7 +31,7 @@ The value of that URI, when dereferenced, is expected to contain a valid Slack A
 
 Because of the way the Slack API works (I think) if a "broadcast" message contains no images it is posted using the `chat.postMessage` API method. If it contains images the message will be posted using the `files.upload` API method.
 
-If a "broadcast" message contains images each image will be posted separately. Any text associated with the "broadcast" message will be assigned to the first image upload. If there's a way to upload multiple images with a single "chat" message using the API I haven't been to figure it out and I would welcome suggestions.
+If a "broadcast" message contains images each image will be posted separately. Any text associated with the "broadcast" message will be assigned to the first image upload. If there's a way to upload multiple images with a single "chat" message using the API I haven't been able to figure it out and I would welcome pointers.
 
 ## See also
 
